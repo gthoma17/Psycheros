@@ -25,6 +25,14 @@ export interface OpenRouterImageSettings {
   apiKey: string;
   model: string;
   baseUrl: string;
+  /**
+   * Route generation through OpenRouter's dedicated image endpoint
+   * (`/api/v1/images`) instead of `/chat/completions`. Image-only models
+   * that are not exposed on the chat endpoint (e.g. Flux Klein) 404 there;
+   * this is how I reach them. Off by default — existing generators keep
+   * using chat completions.
+   */
+  useImagesEndpoint?: boolean;
 }
 
 export interface GeminiImageSettings {

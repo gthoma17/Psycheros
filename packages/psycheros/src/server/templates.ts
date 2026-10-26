@@ -9369,6 +9369,16 @@ export function renderImageGenSlotSettings(
     escapeHtml(orSettings?.baseUrl || "")
   }" placeholder="https://openrouter.ai/api/v1 (default)">
           </div>
+          <div class="llm-field">
+            <label class="toggle-label">
+              <input type="checkbox" id="ig-or-images-endpoint" role="switch" aria-label="Use images endpoint (/api/v1/images)" ${
+    orSettings?.useImagesEndpoint ? "checked" : ""
+  }>
+              <span class="toggle-slider"></span>
+              <span class="toggle-text">Use images endpoint (/api/v1/images)</span>
+            </label>
+            <p class="label-hint" style="margin-top:var(--sp-1);font-size:var(--font-size-xs);color:var(--c-fg-muted);">For image-only models that are not served on chat/completions (e.g. Flux Klein and other BFL models) and 404 there. Leave off for models that work through chat completions.</p>
+          </div>
         </div>
 
         <div id="ig-gemini-section" style="${
@@ -9540,6 +9550,7 @@ async function saveImageGenSlot(id, isNew) {
       apiKey: document.getElementById('ig-or-key').value,
       model: document.getElementById('ig-or-model').value,
       baseUrl: document.getElementById('ig-or-baseurl').value,
+      useImagesEndpoint: document.getElementById('ig-or-images-endpoint').checked,
     };
   }
   if (provider === 'gemini') {

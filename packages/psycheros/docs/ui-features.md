@@ -593,9 +593,13 @@ Settings > Vision provides three tabs:
 
 **Generators** — Card grid for managing image generation provider slots
 (OpenRouter, Gemini, Venice AI, NanoGPT). Each card links to a config form for
-provider, model, API key, default params, and NSFW toggle. Includes captioning
-config section (provider, API key, model). Uses HTMX-driven tabs with OOB swaps
-for active state.
+provider, model, API key, default params, and NSFW toggle. The OpenRouter
+section also has a "Use images endpoint (/api/v1/images)" toggle
+(`settings.openrouter.useImagesEndpoint`, default off) that routes the generator
+through OpenRouter's dedicated image endpoint instead of chat completions —
+needed for image-only models such as Flux Klein that 404 on `/chat/completions`.
+Includes captioning config section (provider, API key, model). Uses HTMX-driven
+tabs with OOB swaps for active state.
 
 **Anchors** — List of labeled reference images used as style/character guides by
 the `generate_image` tool. Each anchor shows a thumbnail, editable label and

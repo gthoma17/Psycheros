@@ -1,0 +1,41 @@
+# The gate: a Caddy basic-auth proxy in front of my harness.
+#
+# I have no login of my own, so this is the only app with a public address.
+# Everything but /healthz asks for the credentials stored as secrets
+# (AUTH_USER, AUTH_PASSWORD_HASH) and forwards to psycheros-harness over the
+# private network. Deploy with this directory as the build context:
+#
+#   fly deploy fly/auth-proxy -c fly/auth-proxy/fly.toml --ha=false
+
+app = "psycheros-gate"
+primary_region = "nrt"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # Fly does not inject PORT; the Caddyfile reads it.
+  PORT = "8080"
+  # 6PN DNS name of my harness app, resolved by Caddy at dial time.
+  PSYCHEROS_HOST = "psycheros-harness.internal"
+  PSYCHEROS_PORT = "3000"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Never scale me to zero: my web UI holds long-lived SSE and WebSocket
+  # connections, and a cold start behind a login prompt is a bad first visit.
+  auto_stop_machines = "off"
+  auto_start_machines = false
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    grace_period = "5s"
+    interval = "30s"
+    timeout = "5s"
+    method = "GET"
+    path = "/healthz"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

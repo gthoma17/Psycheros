@@ -1,0 +1,30 @@
+# The gate's Caddyfile. Every value is read from the environment at start:
+# PORT, PSYCHEROS_HOST and PSYCHEROS_PORT come from fly.toml, AUTH_USER and
+# AUTH_PASSWORD_HASH from the app's secrets.
+{
+	admin off
+	# Fly terminates TLS at its edge; I speak plain HTTP behind it.
+	auto_https off
+}
+
+:{$PORT} {
+	# The health check path stays open so the platform can probe me without
+	# credentials. Everything else is gated.
+	@gated not path /healthz
+
+	basic_auth @gated {
+		{$AUTH_USER} {$AUTH_PASSWORD_HASH}
+	}
+
+	handle /healthz {
+		respond "ok" 200
+	}
+
+	handle {
+		# flush_interval -1 streams responses as they arrive, which my
+		# server-sent events need. WebSockets upgrade through unchanged.
+		reverse_proxy {$PSYCHEROS_HOST}:{$PSYCHEROS_PORT} {
+			flush_interval -1
+		}
+	}
+}

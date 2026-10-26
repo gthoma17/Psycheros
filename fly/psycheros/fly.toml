@@ -1,0 +1,54 @@
+# My harness on Fly.io — the private half of the deployment.
+#
+# This app has no public address. The only way in is through the auth-proxy
+# app, which reaches me over the organization's private network at
+# psycheros-harness.internal:3000. Deploy from the repository root so the
+# Docker build context is the whole workspace, as my Dockerfile expects:
+#
+#   fly deploy -c fly/psycheros/fly.toml --ha=false --no-public-ips
+#
+# --ha=false matters: I keep one machine and one volume, and the default
+# would create a spare machine with a second, empty copy of my memory.
+
+app = "psycheros-harness"
+primary_region = "nrt"
+
+# Transformer embeddings load into memory at boot; swap is the safety net
+# below the 2 GB the VM gives me.
+swap_size_mb = 1024
+
+[build]
+  # Resolved relative to this file. The build context stays at the repo root.
+  dockerfile = "../../packages/psycheros/Dockerfile"
+
+[env]
+  # The image defaults to UTC; I live on Tokyo time.
+  TZ = "Asia/Tokyo"
+  PSYCHEROS_DISPLAY_TZ = "Asia/Tokyo"
+  # One volume per machine, so my harness state nests inside the entity-core
+  # data volume. entity-core reads only its own named category directories
+  # and ignores this extra one.
+  PSYCHEROS_DATA_DIR = "/app/packages/entity-core/data/psycheros"
+
+# My canonical identity and memory. The image default for
+# PSYCHEROS_ENTITY_CORE_DATA_DIR is this same path, so nothing else moves.
+[[mounts]]
+  source = "entity_data"
+  destination = "/app/packages/entity-core/data"
+  initial_size = "5gb"
+
+[[vm]]
+  size = "shared-cpu-2x"
+  memory = "2gb"
+
+# A machine check, not a service check: there is no service here to route.
+# The long grace period covers my first boot, when the embedding model
+# downloads into the volume.
+[checks.health]
+  type = "http"
+  port = 3000
+  path = "/health"
+  method = "get"
+  grace_period = "300s"
+  interval = "30s"
+  timeout = "10s"

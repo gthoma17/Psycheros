@@ -22,6 +22,9 @@ swap_size_mb = 1024
   dockerfile = "../../packages/psycheros/Dockerfile"
 
 [env]
+  # The image binds 0.0.0.0, which is IPv4 only, but the gate reaches me over
+  # 6PN, which is IPv6. "::" listens on both.
+  PSYCHEROS_HOST = "::"
   # The image defaults to UTC; I live on Tokyo time.
   TZ = "Asia/Tokyo"
   PSYCHEROS_DISPLAY_TZ = "Asia/Tokyo"

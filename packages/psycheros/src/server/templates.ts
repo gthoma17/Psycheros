@@ -9377,7 +9377,7 @@ export function renderImageGenSlotSettings(
               <span class="toggle-slider"></span>
               <span class="toggle-text">Use images endpoint (/api/v1/images)</span>
             </label>
-            <span class="llm-field-hint">For image-only models that are not served on chat/completions (e.g. Flux Klein and other BFL models) and 404 there. Leave off for models that work through chat completions.</span>
+            <p class="label-hint" style="margin-top:var(--sp-1);font-size:var(--font-size-xs);color:var(--c-fg-muted);">For image-only models that are not served on chat/completions (e.g. Flux Klein and other BFL models) and 404 there. Leave off for models that work through chat completions.</p>
           </div>
         </div>
 

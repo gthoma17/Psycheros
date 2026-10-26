@@ -236,11 +236,14 @@ async function generateViaOpenRouterImages(
     }));
   }
 
+  // Same app-attribution headers my LLM client sends OpenRouter.
   const response = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${sanitizeHeaderValue(settings.apiKey)}`,
+      "HTTP-Referer": "https://github.com/anthropics/psycheros",
+      "X-Title": "Psycheros",
     },
     body: JSON.stringify(body),
   });

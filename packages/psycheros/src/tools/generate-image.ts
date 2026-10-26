@@ -117,14 +117,140 @@ export function isOpenRouterImageOnlyModel(model: string): boolean {
 
 /**
  * Normalize a user-pasted OpenRouter base URL. I strip trailing slashes and a
- * trailing `/chat/completions` so that pasting the full endpoint — a common
- * copy-paste mistake — does not double the path into
- * `…/chat/completions/chat/completions`.
+ * trailing `/chat/completions` (or `/images`, the dedicated image endpoint)
+ * so that pasting the full endpoint — a common copy-paste mistake — does not
+ * double the path into `…/chat/completions/chat/completions`.
  */
 export function normalizeOpenRouterBaseUrl(raw: string): string {
   return raw.trim()
     .replace(/\/+$/, "")
-    .replace(/\/chat\/completions\/?$/i, "");
+    .replace(/\/chat\/completions\/?$/i, "")
+    .replace(/\/images(\/generations)?\/?$/i, "");
+}
+
+/**
+ * Resolve the OpenRouter URL I post a generation to. The chat endpoint is the
+ * default; the dedicated image endpoint (`/api/v1/images`) is opt-in per
+ * generator because it only serves image-only models — text-capable image
+ * models still need chat completions.
+ */
+export function openRouterImageGenUrl(
+  baseUrl: string,
+  useImagesEndpoint: boolean,
+): string {
+  const base = normalizeOpenRouterBaseUrl(
+    baseUrl || "https://openrouter.ai/api/v1",
+  );
+  return useImagesEndpoint ? `${base}/images` : `${base}/chat/completions`;
+}
+
+/**
+ * Pull the image out of an OpenRouter `/api/v1/images` response:
+ * `{ data: [{ b64_json, media_type? }] }`. `media_type` is only present when
+ * OpenRouter could identify the format, so I fall back to PNG. A hosted `url`
+ * is not documented for this endpoint, but if one ever shows up I download it
+ * rather than fail.
+ */
+export async function extractOpenRouterImagesResponse(
+  payload: unknown,
+): Promise<{ imageData: string; mediaType: string }> {
+  const data = (payload as { data?: unknown })?.data;
+  const first = Array.isArray(data)
+    ? data[0] as
+      | { b64_json?: string; media_type?: string; url?: string }
+      | undefined
+    : undefined;
+
+  if (!first) {
+    throw new Error("OpenRouter images endpoint returned no data entries");
+  }
+
+  if (first.b64_json) {
+    return {
+      imageData: first.b64_json,
+      mediaType: first.media_type || "image/png",
+    };
+  }
+
+  if (first.url) {
+    const imgResponse = await fetch(first.url);
+    if (!imgResponse.ok) {
+      throw new Error(
+        `OpenRouter returned an image URL but download failed (${imgResponse.status})`,
+      );
+    }
+    const buffer = await imgResponse.arrayBuffer();
+    return {
+      imageData: uint8ToBase64(new Uint8Array(buffer)),
+      mediaType: imgResponse.headers.get("content-type") || "image/png",
+    };
+  }
+
+  throw new Error(
+    "OpenRouter images endpoint response contained neither b64_json nor url",
+  );
+}
+
+/**
+ * I use OpenRouter's dedicated image endpoint (`POST /api/v1/images`) for
+ * models that only exist there — Flux Klein and other image-only BFL models
+ * 404 on chat completions. Request shape: `model`, `prompt`, optional
+ * `aspect_ratio`, and `input_references` (data-URL images) for reference-based
+ * generation. Response: `data[0].b64_json` (+ optional `media_type`).
+ */
+async function generateViaOpenRouterImages(
+  settings: { apiKey: string; model: string; baseUrl: string },
+  params: CommonImageGenParams,
+  prompt: string,
+  negativePrompt: string | undefined,
+  referenceImages: Array<{ data: string; mediaType: string }>,
+): Promise<{ imageData: string; mediaType: string }> {
+  const url = openRouterImageGenUrl(settings.baseUrl, true);
+
+  // No negative_prompt field on this endpoint — fold it in, same as chat.
+  let fullPrompt = prompt;
+  if (negativePrompt) {
+    fullPrompt += `\n\nStyle requirements: avoid ${negativePrompt}.`;
+  }
+
+  const body: Record<string, unknown> = {
+    model: settings.model,
+    prompt: fullPrompt,
+  };
+
+  // aspect_ratio support varies by model and an unsupported parameter is a
+  // 400, so I only send it when the generator actually asks for a shape:
+  // an explicit ratio, or non-square dimensions.
+  const aspectRatio = params.aspect_ratio ||
+    (params.width !== params.height
+      ? mapToAspectRatio(params.width, params.height)
+      : undefined);
+  if (aspectRatio) {
+    body.aspect_ratio = aspectRatio;
+  }
+
+  if (referenceImages.length > 0) {
+    body.input_references = referenceImages.map((img) => ({
+      type: "image_url",
+      image_url: { url: `data:${img.mediaType};base64,${img.data}` },
+    }));
+  }
+
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${sanitizeHeaderValue(settings.apiKey)}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
+  }
+
+  return await extractOpenRouterImagesResponse(await response.json());
 }
 
 /**
@@ -208,9 +334,20 @@ async function generateViaOpenRouter(
     throw new Error("OpenRouter settings not configured for this generator");
   }
 
-  const baseUrl = normalizeOpenRouterBaseUrl(
-    settings.baseUrl || "https://openrouter.ai/api/v1",
-  );
+  if (settings.useImagesEndpoint) {
+    return await generateViaOpenRouterImages(
+      settings,
+      config.settings.params,
+      prompt,
+      negativePrompt,
+      [
+        ...anchorImages,
+        ...(userImage ? [userImage] : []),
+        ...(inputImage ? [inputImage] : []),
+      ],
+    );
+  }
+
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${sanitizeHeaderValue(settings.apiKey)}`,
@@ -276,11 +413,14 @@ async function generateViaOpenRouter(
     image_config: imageConfig,
   };
 
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(body),
-  });
+  const response = await fetch(
+    openRouterImageGenUrl(settings.baseUrl, false),
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify(body),
+    },
+  );
 
   if (!response.ok) {
     const errorText = await response.text();

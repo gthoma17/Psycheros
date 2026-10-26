@@ -75,7 +75,7 @@ fly secrets set --app psycheros-gate \
 
 # 4. Build and start me, from the repository root
 fly deploy -c fly/psycheros/fly.toml --ha=false --no-public-ips
-fly deploy fly/auth-proxy -c fly/auth-proxy/fly.toml --ha=false
+fly deploy fly/auth-proxy --ha=false
 ```
 
 Open `https://psycheros-gate.fly.dev`, enter the gate credentials, and run my

@@ -5,7 +5,7 @@
 # (AUTH_USER, AUTH_PASSWORD_HASH) and forwards to psycheros-harness over the
 # private network. Deploy with this directory as the build context:
 #
-#   fly deploy fly/auth-proxy -c fly/auth-proxy/fly.toml --ha=false
+#   fly deploy fly/auth-proxy --ha=false
 
 app = "psycheros-gate"
 primary_region = "nrt"

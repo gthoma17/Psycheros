@@ -1,0 +1,9 @@
+{
+  "name": "psycheros-railway-config",
+  "private": true,
+  "type": "module",
+  "description": "Railway SDK pin for .railway/railway.ts — install with `npm ci` inside this directory",
+  "dependencies": {
+    "railway": "^3.16.0"
+  }
+}
